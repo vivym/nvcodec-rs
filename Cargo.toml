@@ -1,0 +1,3 @@
+[workspace]
+members = ["nvcodec", "nvcodec-sys"]
+resolver = "2"

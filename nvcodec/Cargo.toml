@@ -1,0 +1,15 @@
+[package]
+name = "nvcodec"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nvcodec-sys = { path = "../nvcodec-sys" }
+
+[profile.release]
+lto = true
+
+[profile.bench]
+lto = true
