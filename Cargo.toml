@@ -1,3 +1,9 @@
 [workspace]
 members = ["nvcodec", "nvcodec-sys"]
 resolver = "2"
+
+[profile.release]
+lto = true
+
+[profile.bench]
+lto = true

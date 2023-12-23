@@ -9,9 +9,3 @@ edition = "2021"
 
 [build-dependencies]
 bindgen = "0.69.1"
-
-[profile.release]
-lto = true
-
-[profile.bench]
-lto = true
