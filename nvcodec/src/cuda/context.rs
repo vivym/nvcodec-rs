@@ -4,7 +4,7 @@ use crate::ffi::cuda::{
 use super::device::CuDevice;
 
 pub struct CuPrimaryContext {
-    context: CUcontext,
+    pub context: CUcontext,
 }
 
 impl CuPrimaryContext {
@@ -28,18 +28,18 @@ impl CuPrimaryContext {
     }
 }
 
-pub struct PrimaryContextGuard {
-    context: CuPrimaryContext,
+pub struct CuPrimaryContextGuard {
+    pub context: CuPrimaryContext,
 }
 
-impl PrimaryContextGuard {
-    pub fn new(context: CuPrimaryContext) -> Result<PrimaryContextGuard, CUresult> {
+impl CuPrimaryContextGuard {
+    pub fn new(context: CuPrimaryContext) -> Result<CuPrimaryContextGuard, CUresult> {
         context.push()?;
-        Ok(PrimaryContextGuard { context })
+        Ok(CuPrimaryContextGuard { context })
     }
 }
 
-impl Drop for PrimaryContextGuard {
+impl Drop for CuPrimaryContextGuard {
     fn drop(&mut self) {
         self.context.pop().unwrap();
     }

@@ -1,5 +1,7 @@
-use futures::stream::Stream;
-use futures::task::AtomicWaker;
+use futures::{
+    stream::Stream,
+    task::AtomicWaker,
+};
 use std::{
     io,
     path::Path,
@@ -8,72 +10,45 @@ use std::{
     task::{Context, Poll},
     thread,
 };
-use ffmpeg_next::codec::context::Context as CodecContext;
-use ffmpeg_next::util::frame::Video as VideoFrame;
+use ffmpeg_next::{
+    codec::{
+        Id as CodecId,
+        context::Context as CodecContext,
+    },
+    util::{
+        frame::Video as VideoFrame,
+        format::Pixel as PixelFormat,
+    },
+};
 
 pub struct FFmpegDemuxStream{
+    pub codec_id: CodecId,
+    pub pixel_format: PixelFormat,
     waker: Arc<AtomicWaker>,
     rx: Receiver<io::Result<VideoFrame>>,
 }
 
 impl FFmpegDemuxStream {
-    pub fn new<P: AsRef<Path>>(path: &P) -> Self {
+    pub fn new<P: AsRef<Path>>(path: &P) -> io::Result<Self> {
         let waker = Arc::new(AtomicWaker::new());
         let (tx, rx) =
             mpsc::sync_channel::<io::Result<VideoFrame>>(8);
 
-        let waker_in_thread = waker.clone();
-        let path = (*path.as_ref()).to_owned();
+        let mut ctx = ffmpeg_next::format::input(path)?;
+
+        let stream = ctx
+            .streams()
+            .best(ffmpeg_next::media::Type::Video)
+            .ok_or(ffmpeg_next::Error::StreamNotFound)?;
+        let video_stream_index = stream.index();
+
+        let codec_ctx = CodecContext::from_parameters(stream.parameters())?;
+        let codec_id = codec_ctx.id();
+        let mut decoder = codec_ctx.decoder().video()?;
+        let pixel_format = decoder.format();
+
+        let waker_in_thread: Arc<AtomicWaker> = waker.clone();
         thread::spawn(move || {
-            let mut ctx = match ffmpeg_next::format::input(&path) {
-                Ok(ctx) => ctx,
-                Err(e) => {
-                    if let Err(_) = tx.send(Err(e.into())) {
-                        return;
-                    }
-                    waker_in_thread.wake();
-                    return;
-                }
-            };
-
-            let stream = match ctx
-                .streams()
-                .best(ffmpeg_next::media::Type::Video)
-                .ok_or(ffmpeg_next::Error::StreamNotFound)
-            {
-                Ok(stream) => stream,
-                Err(e) => {
-                    if let Err(_) = tx.send(Err(e.into())) {
-                        return;
-                    }
-                    waker_in_thread.wake();
-                    return;
-                }
-            };
-            let video_stream_index = stream.index();
-
-            let decoder_ctx = match CodecContext::from_parameters(stream.parameters()) {
-                Ok(decoder_ctx) => decoder_ctx,
-                Err(e) => {
-                    if let Err(_) = tx.send(Err(e.into())) {
-                        return;
-                    }
-                    waker_in_thread.wake();
-                    return;
-                }
-            };
-
-            let mut decoder = match decoder_ctx.decoder().video() {
-                Ok(decoder) => decoder,
-                Err(e) => {
-                    if let Err(_) = tx.send(Err(e.into())) {
-                        return;
-                    }
-                    waker_in_thread.wake();
-                    return;
-                }
-            };
-
             for (stream, packet) in ctx.packets() {
                 if stream.index() == video_stream_index {
                     match decoder.send_packet(&packet) {
@@ -101,7 +76,7 @@ impl FFmpegDemuxStream {
             waker_in_thread.wake();
         });
 
-        FFmpegDemuxStream{ waker, rx }
+        Ok(Self{ codec_id, pixel_format, waker, rx })
     }
 
 }
