@@ -1,13 +1,27 @@
 [package]
 name = "nvcodec"
 version = "0.1.0"
+authors = ["Ming Yang <ymviv@qq.com>"]
+description = "Rust safe wrapper for NVIDIA Video Codec SDK"
+repository = "https://github.com/vivym/nvcodec-rs"
+readme = "README.md"
+keywords = ["nvcodec", "cuda", "ffi"]
+license = "MIT/Apache-2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-stream = "0.3.5"
-ffmpeg-next = "6.1.0"
-futures = "0.3.29"
-nvcodec-sys = { path = "../nvcodec-sys" }
-tokio = { version = "1.35.1", features = ["rt-multi-thread", "macros"] }
+cuda-rs = "0.1"
+ffmpeg-next = "6"
+flume = "0.11"
+futures = "0.3"
+num-traits = "0.2"
+thiserror = "1"
+tracing = "0.1"
+nvcodec-sys = "0.1"
+
+[dev-dependencies]
+clap = { version = "4", features = ["derive"] }
+indicatif = "0.17.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

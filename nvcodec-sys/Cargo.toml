@@ -1,6 +1,12 @@
 [package]
 name = "nvcodec-sys"
 version = "0.1.0"
+authors = ["Ming Yang <ymviv@qq.com>"]
+description = "Rust binding to NVIDIA Video Codec SDK"
+repository = "https://github.com/vivym/nvcodec-rs"
+readme = "README.md"
+keywords = ["nvcodec", "cuda", "ffi"]
+license = "MIT/Apache-2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

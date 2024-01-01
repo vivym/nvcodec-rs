@@ -1,21 +1,6 @@
-pub mod cuda;
-pub mod nvcuvid;
+#![allow(dead_code)]
+#![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
+#![allow(non_upper_case_globals)]
 
-#[cfg(test)]
-mod tests {
-    use super::cuda::*;
-
-    #[test]
-    fn init_and_version() {
-        let ret = unsafe { cuInit(0) };
-        println!("{:?}", ret);
-
-        let ver = unsafe {
-            let mut ver = 0;
-            cuDriverGetVersion(&mut ver as *mut i32);
-            ver
-        };
-
-        println!("Version {}", ver);
-    }
-}
+include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
