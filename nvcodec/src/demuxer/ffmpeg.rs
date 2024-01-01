@@ -44,11 +44,10 @@ impl FFmpegDemuxStream {
         let codec_id = codec_ctx.id();
 
         let stream_params = stream.parameters();
-        let codec_id_in_thread = codec_id.clone();
         let waker_in_thread: Arc<AtomicWaker> = waker.clone();
 
         thread::spawn(move || {
-            let bsf_name = match codec_id_in_thread {
+            let bsf_name = match codec_id {
                 CodecId::H264 => Some("h264_mp4toannexb"),
                 CodecId::HEVC => Some("hevc_mp4toannexb"),
                 _ => None,
@@ -58,7 +57,7 @@ impl FFmpegDemuxStream {
                     match BSFContext::new(name, stream_params) {
                         Ok(ctx) => Some(ctx),
                         Err(e) => {
-                            if let Err(_) = tx.send(Err(e)) {
+                            if tx.send(Err(e)).is_err() {
                                 return;
                             }
                             waker_in_thread.wake();
@@ -76,7 +75,7 @@ impl FFmpegDemuxStream {
                             match bsf_ctx.send_packet(&mut packet) {
                                 Ok(_) => (),
                                 Err(e) => {
-                                    if let Err(_) = tx.send(Err(e)) {
+                                    if tx.send(Err(e)).is_err() {
                                         return;
                                     }
                                     waker_in_thread.wake();
@@ -86,7 +85,7 @@ impl FFmpegDemuxStream {
                             match bsf_ctx.receive_packet() {
                                 Ok(packet) => packet,
                                 Err(e) => {
-                                    if let Err(_) = tx.send(Err(e)) {
+                                    if tx.send(Err(e)).is_err() {
                                         return;
                                     }
                                     waker_in_thread.wake();
@@ -97,7 +96,7 @@ impl FFmpegDemuxStream {
                         None => packet,
                     };
 
-                    if let Err(_) = tx.send(Ok(packet)) {
+                    if tx.send(Ok(packet)).is_err() {
                         return;
                     }
                     waker_in_thread.wake();
@@ -121,7 +120,7 @@ impl Stream for FFmpegDemuxStream {
 
         match self.rx.try_recv() {
             Ok(v) => {
-                return Poll::Ready(Some(v));
+                Poll::Ready(Some(v))
             }
             Err(mpsc::TryRecvError::Empty) => {
                 Poll::Pending
@@ -168,7 +167,7 @@ impl BSFContext {
                 return Err(ffmpeg_next::Error::from(res).into());
             }
 
-            return Ok(Self { bsf_ctx });
+            Ok(Self { bsf_ctx })
         }
     }
 

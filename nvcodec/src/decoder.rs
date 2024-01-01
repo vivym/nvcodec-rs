@@ -151,7 +151,7 @@ impl NVDecoder {
                             pts,
                             PacketData {
                                 key: packet.is_key(),
-                                pts: pts,
+                                pts,
                                 dts: packet.dts().unwrap_or(-1),
                                 pos: packet.position(),
                                 duration: packet.duration(),
@@ -190,7 +190,7 @@ impl Stream for NVDecoder {
 
         match self.receiver.try_recv() {
             Ok(v) => {
-                return Poll::Ready(Some(v));
+                Poll::Ready(Some(v))
             }
             Err(flume::TryRecvError::Empty) => {
                 if self.eos {
@@ -211,11 +211,11 @@ impl Drop for NVDecoder {
         let _guard = self.inner.ctx.clone().guard().unwrap();
 
         unsafe {
-            if self.inner.parser != std::ptr::null_mut() {
+            if !self.inner.parser.is_null() {
                 ffi::cuvidDestroyVideoParser(self.inner.parser);
             }
 
-            if self.inner.decoder != std::ptr::null_mut() {
+            if !self.inner.decoder.is_null() {
                 ffi::cuvidDestroyDecoder(self.inner.decoder);
             }
 
@@ -232,7 +232,7 @@ impl Inner {
                 tracing::error!("Error in sequence callback: {:?}", err);
 
                 if let Some(sender) = self.sender.as_ref() {
-                    if let Ok(_) = sender.send(Err(err)) {
+                    if sender.send(Err(err)).is_ok() {
                         self.waker.wake();
                     }
                 }
@@ -538,7 +538,7 @@ impl Inner {
                 tracing::error!("Error in picture decode callback: {:?}", err);
 
                 if let Some(sender) = self.sender.as_ref() {
-                    if let Ok(_) = sender.send(Err(err)) {
+                    if sender.send(Err(err)).is_ok() {
                         self.waker.wake();
                     }
                 }
@@ -572,7 +572,7 @@ impl Inner {
                 tracing::error!("Error in picture display callback: {:?}", err);
 
                 if let Some(sender) = self.sender.as_ref() {
-                    if let Ok(_) = sender.send(Err(err)) {
+                    if sender.send(Err(err)).is_ok() {
                         self.waker.wake();
                     }
                 }
@@ -666,7 +666,7 @@ impl Inner {
                 packet_data: self.packet_map.lock().unwrap().remove(&display_info.timestamp),
             };
 
-            if let Ok(_) = sender.send(Ok(frame)) {
+            if sender.send(Ok(frame)).is_ok() {
                 self.waker.wake();
             }
         }
@@ -728,6 +728,7 @@ pub unsafe extern "C" fn handle_picture_display_proc(
     decoder.picture_display_callback(display_info)
 }
 
+#[derive(Clone, Copy, Debug, Default)]
 pub struct DisplayArea {
     pub top: i32,
     pub left: i32,
@@ -735,27 +736,8 @@ pub struct DisplayArea {
     pub right: i32,
 }
 
-impl Default for DisplayArea {
-    fn default() -> Self {
-        Self {
-            top: 0,
-            left: 0,
-            bottom: 0,
-            right: 0,
-        }
-    }
-}
-
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Size {
     pub width: i32,
     pub height: i32,
-}
-
-impl Default for Size {
-    fn default() -> Self {
-        Self {
-            width: 0,
-            height: 0,
-        }
-    }
 }

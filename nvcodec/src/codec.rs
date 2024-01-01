@@ -15,9 +15,9 @@ pub enum CuVideoCodecType {
     AV1 = ffi::cudaVideoCodec_enum_cudaVideoCodec_AV1 as isize,
 }
 
-impl Into<CuVideoCodecType> for CodecId {
-    fn into(self) -> CuVideoCodecType {
-        match self {
+impl From<CodecId> for CuVideoCodecType {
+    fn from(codec_id: CodecId) -> Self {
+        match codec_id {
             CodecId::MPEG1VIDEO => CuVideoCodecType::MPEG1,
             CodecId::MPEG2VIDEO => CuVideoCodecType::MPEG2,
             CodecId::MPEG4 => CuVideoCodecType::MPEG4,
@@ -28,24 +28,24 @@ impl Into<CuVideoCodecType> for CodecId {
             CodecId::VP8 => CuVideoCodecType::VP8,
             CodecId::VP9 => CuVideoCodecType::VP9,
             CodecId::AV1 => CuVideoCodecType::AV1,
-            _ => panic!("unsupported codec id: {:?}", self),
+            _ => panic!("unsupported codec id: {:?}", codec_id),
         }
     }
 }
 
-impl Into<CodecId> for CuVideoCodecType {
-    fn into(self) -> CodecId {
-        match self {
-            CuVideoCodecType::MPEG1 => CodecId::MPEG1VIDEO,
-            CuVideoCodecType::MPEG2 => CodecId::MPEG2VIDEO,
-            CuVideoCodecType::MPEG4 => CodecId::MPEG4,
-            CuVideoCodecType::VC1 => CodecId::VC1,
-            CuVideoCodecType::H264 => CodecId::H264,
-            CuVideoCodecType::JPEG => CodecId::JPEG2000,
-            CuVideoCodecType::HEVC => CodecId::HEVC,
-            CuVideoCodecType::VP8 => CodecId::VP8,
-            CuVideoCodecType::VP9 => CodecId::VP9,
-            CuVideoCodecType::AV1 => CodecId::AV1,
-        }
-    }
-}
+// impl Into<CodecId> for CuVideoCodecType {
+//     fn into(self) -> CodecId {
+//         match self {
+//             CuVideoCodecType::MPEG1 => CodecId::MPEG1VIDEO,
+//             CuVideoCodecType::MPEG2 => CodecId::MPEG2VIDEO,
+//             CuVideoCodecType::MPEG4 => CodecId::MPEG4,
+//             CuVideoCodecType::VC1 => CodecId::VC1,
+//             CuVideoCodecType::H264 => CodecId::H264,
+//             CuVideoCodecType::JPEG => CodecId::JPEG2000,
+//             CuVideoCodecType::HEVC => CodecId::HEVC,
+//             CuVideoCodecType::VP8 => CodecId::VP8,
+//             CuVideoCodecType::VP9 => CodecId::VP9,
+//             CuVideoCodecType::AV1 => CodecId::AV1,
+//         }
+//     }
+// }
