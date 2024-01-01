@@ -12,15 +12,72 @@ use std::{
     task::{Context, Poll},
     thread,
 };
-use ffmpeg_next::codec::{
-    Id as CodecId,
-    packet::{Packet, Mut},
-    Parameters,
+use ffmpeg_next::{
+    codec::{
+        Id as CodecId,
+        packet::{Packet as AVPacket, Mut},
+        Parameters,
+    },
+    util::color::{Range, Space},
 };
+
+pub struct Packet {
+    av_packet: AVPacket,
+    color_space: Space,
+    color_range: Range,
+}
+
+impl Packet {
+    pub fn data(&self) -> Option<&[u8]> {
+        self.av_packet.data()
+    }
+
+    pub fn data_mut(&mut self) -> Option<&mut [u8]> {
+        self.av_packet.data_mut()
+    }
+
+    pub fn is_key(&self) -> bool {
+        self.av_packet.is_key()
+    }
+
+    pub fn is_corrupt(&self) -> bool {
+        self.av_packet.is_corrupt()
+    }
+
+    pub fn pts(&self) -> Option<i64> {
+        self.av_packet.pts()
+    }
+
+    pub fn dts(&self) -> Option<i64> {
+        self.av_packet.dts()
+    }
+
+    pub fn duration(&self) -> i64 {
+        self.av_packet.duration()
+    }
+
+    pub fn position(&self) -> isize {
+        self.av_packet.position()
+    }
+
+    pub fn size(&self) -> usize {
+        self.av_packet.size()
+    }
+
+    pub fn color_space(&self) -> Space {
+        self.color_space
+    }
+
+    pub fn color_range(&self) -> Range {
+        self.color_range
+    }
+}
 
 pub struct FFmpegDemuxStream {
     pub codec_id: CodecId,
     pub total_frames: i64,
+    pub color_space: Space,
+    pub color_range: Range,
     waker: Arc<AtomicWaker>,
     rx: Receiver<NVCodecResult<Packet>>,
 }
@@ -39,11 +96,15 @@ impl FFmpegDemuxStream {
             .ok_or(ffmpeg_next::Error::StreamNotFound)?;
         let video_stream_index = stream.index();
         let total_frames = stream.frames();
-
+        let stream_params = stream.parameters();
         let codec_ctx = stream.codec();
         let codec_id = codec_ctx.id();
 
-        let stream_params = stream.parameters();
+        let (color_range, color_space) = unsafe {
+            let params = *stream_params.as_ptr();
+            (params.color_range, params.color_space)
+        };
+
         let waker_in_thread: Arc<AtomicWaker> = waker.clone();
 
         thread::spawn(move || {
@@ -95,6 +156,11 @@ impl FFmpegDemuxStream {
                         }
                         None => packet,
                     };
+                    let packet = Packet {
+                        av_packet: packet,
+                        color_space: color_space.into(),
+                        color_range: color_range.into(),
+                    };
 
                     if tx.send(Ok(packet)).is_err() {
                         return;
@@ -107,7 +173,14 @@ impl FFmpegDemuxStream {
             waker_in_thread.wake();
         });
 
-        Ok(Self { codec_id, total_frames, waker, rx })
+        Ok(Self {
+            codec_id,
+            total_frames,
+            color_space: color_space.into(),
+            color_range: color_range.into(),
+            waker,
+            rx,
+        })
     }
 
 }
@@ -171,7 +244,7 @@ impl BSFContext {
         }
     }
 
-    pub fn send_packet(&self, packet: &mut Packet) -> NVCodecResult<()> {
+    pub fn send_packet(&self, packet: &mut AVPacket) -> NVCodecResult<()> {
         unsafe {
             let res = ffmpeg_next::ffi::av_bsf_send_packet(
                 self.bsf_ctx, packet.as_mut_ptr()
@@ -184,8 +257,8 @@ impl BSFContext {
         Ok(())
     }
 
-    pub fn receive_packet(&self) -> NVCodecResult<Packet> {
-        let mut packet = Packet::empty();
+    pub fn receive_packet(&self) -> NVCodecResult<AVPacket> {
+        let mut packet = AVPacket::empty();
 
         unsafe {
             let res = ffmpeg_next::ffi::av_bsf_receive_packet(

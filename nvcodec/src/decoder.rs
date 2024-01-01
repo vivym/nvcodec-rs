@@ -1,5 +1,6 @@
 use crate::{
     codec::CuVideoCodecType,
+    demuxer::ffmpeg::Packet,
     error::{NVCodecResult, NVCodecError},
     ffi,
     surface::VideoSurfaceFormat,
@@ -9,7 +10,7 @@ use cuda_rs::{
     stream::CuStream,
     memory::PitchedDeviceMemory,
 };
-use ffmpeg_next::codec::packet::Packet;
+use ffmpeg_next::util::color::{Range, Space};
 use futures::{
     stream::Stream,
     task::AtomicWaker,
@@ -19,6 +20,10 @@ use std::{
     pin::Pin,
     sync::{Arc, Mutex},
     task::{Context, Poll},
+};
+use npp::{
+    color::{PixelFormat, ColorSpace, ColorRange},
+    image::DeviceImage,
 };
 
 struct Inner {
@@ -62,11 +67,70 @@ pub struct PacketData {
     pub dts: i64,
     pub pos: isize,
     pub duration: i64,
+    pub color_space: Space,
+    pub color_range: Range,
 }
 
 pub struct DecodedFrame {
     pub buf: PitchedDeviceMemory,
+    pub width: usize,
+    pub height: usize,
     pub packet_data: Option<PacketData>,
+    pub surface_format: VideoSurfaceFormat,
+}
+
+impl From<DecodedFrame> for DeviceImage {
+    fn from(frame: DecodedFrame) -> Self {
+        let pixel_format = match frame.surface_format {
+            VideoSurfaceFormat::NV12 => {
+                PixelFormat::NV12
+            }
+            VideoSurfaceFormat::P016 => {
+                PixelFormat::P016
+            }
+            VideoSurfaceFormat::YUV444 => {
+                PixelFormat::YUV444
+            }
+            VideoSurfaceFormat::YUV444_16Bit => {
+                PixelFormat::YUV444_16Bit
+            }
+        };
+
+        let color_space = match frame.packet_data {
+            Some(ref packet_data) => {
+                match packet_data.color_space {
+                    Space::BT470BG | Space::SMPTE170M => ColorSpace::BT601,
+                    Space::BT709 => ColorSpace::BT709,
+                    _ => ColorSpace::UNSPEC,
+                }
+            }
+            None => {
+                ColorSpace::UNSPEC
+            }
+        };
+
+        let color_range = match frame.packet_data {
+            Some(ref packet_data) => {
+                match packet_data.color_range {
+                    Range::MPEG => ColorRange::MPEG,
+                    Range::JPEG => ColorRange::JPEG,
+                    _ => ColorRange::UDEF,
+                }
+            }
+            None => {
+                ColorRange::UDEF
+            }
+        };
+
+        Self {
+            mem: frame.buf,
+            width: frame.width,
+            height: frame.height,
+            pixel_format,
+            color_space,
+            color_range,
+        }
+    }
 }
 
 impl NVDecoder {
@@ -155,6 +219,8 @@ impl NVDecoder {
                                 dts: packet.dts().unwrap_or(-1),
                                 pos: packet.position(),
                                 duration: packet.duration(),
+                                color_space: packet.color_space(),
+                                color_range: packet.color_range(),
                             }
                         );
                     }
@@ -663,7 +729,10 @@ impl Inner {
         if let Some(sender) = self.sender.as_ref() {
             let frame = DecodedFrame {
                 buf: surface_buffer,
+                width: self.width as _,
+                height: self.luma_height as _,
                 packet_data: self.packet_map.lock().unwrap().remove(&display_info.timestamp),
+                surface_format: self.surface_fmt,
             };
 
             if sender.send(Ok(frame)).is_ok() {

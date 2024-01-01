@@ -6,7 +6,8 @@ use nvcodec::{
     decoder::NVDecoder,
 };
 use indicatif::ProgressBar;
-use std::{path::Path, io::Write as _};
+use std::path::Path;
+use npp::{color::PixelFormat, image::DeviceImage};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -28,8 +29,6 @@ async fn main() {
 
     let output_dir = Path::new(&output_dir);
 
-    // let bar = ProgressBar::new();
-
     cuda_rs::init().unwrap();
 
     let device = CuDevice::new(0).unwrap();
@@ -37,8 +36,6 @@ async fn main() {
     let _guard = ctx.guard().unwrap();
 
     let mut demuxer = FFmpegDemuxStream::new(&input_video).unwrap();
-    println!("codec_id: {:?}", demuxer.codec_id);
-    println!("total_frames: {:?}", demuxer.total_frames);
 
     let bar = ProgressBar::new(demuxer.total_frames as u64);
 
@@ -77,18 +74,23 @@ async fn main() {
             Some(res) = decoder.next() => {
                 match res {
                     Ok(frame) => {
-                        let host_mem = frame.buf.to_host().unwrap();
+                        let device_image: DeviceImage = frame.into();
+
+                        let device_image = device_image.convert_pixel_format(
+                            PixelFormat::RGB, &stream
+                        ).unwrap();
+
+                        let host_mem = device_image.mem.to_host().unwrap();
+
                         stream.synchronize().unwrap();
 
-                        let slice = host_mem.as_slice();
-
-                        std::fs::OpenOptions::new()
-                            .write(true)
-                            .create(true)
-                            .open(output_dir.join(format!("frame_{}.yuv", i)))
-                            .unwrap()
-                            .write_all(slice)
-                            .unwrap();
+                        image::save_buffer(
+                            output_dir.join(format!("frame_{}.jpg", i)),
+                            host_mem.as_slice(),
+                            device_image.width as _,
+                            device_image.height as _,
+                            image::ColorType::Rgb8,
+                        ).unwrap();
 
                         bar.inc(1);
                         i += 1;
@@ -106,18 +108,23 @@ async fn main() {
     while let Some(res) = decoder.next().await {
         match res {
             Ok(frame) => {
-                let host_mem = frame.buf.to_host().unwrap();
+                let device_image: DeviceImage = frame.into();
+
+                let device_image = device_image.convert_pixel_format(
+                    PixelFormat::RGB, &stream
+                ).unwrap();
+
+                let host_mem = device_image.mem.to_host().unwrap();
+
                 stream.synchronize().unwrap();
 
-                let slice = host_mem.as_slice();
-
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .open(output_dir.join(format!("frame_{}.yuv", i)))
-                    .unwrap()
-                    .write_all(slice)
-                    .unwrap();
+                image::save_buffer(
+                    output_dir.join(format!("frame_{}.jpg", i)),
+                    host_mem.as_slice(),
+                    device_image.width as _,
+                    device_image.height as _,
+                    image::ColorType::Rgb8,
+                ).unwrap();
 
                 bar.inc(1);
                 i += 1;

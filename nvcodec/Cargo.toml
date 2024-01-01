@@ -1,6 +1,6 @@
 [package]
 name = "nvcodec"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Ming Yang <ymviv@qq.com>"]
 description = "Rust safe wrapper for NVIDIA Video Codec SDK"
 repository = "https://github.com/vivym/nvcodec-rs"
@@ -20,8 +20,10 @@ num-traits = "0.2"
 thiserror = "1"
 tracing = "0.1"
 nvcodec-sys = "0.1"
+npp = "0.1"
 
 [dev-dependencies]
 clap = { version = "4", features = ["derive"] }
+image = "0.24.7"
 indicatif = "0.17.7"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
